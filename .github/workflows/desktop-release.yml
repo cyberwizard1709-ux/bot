@@ -59,10 +59,11 @@ jobs:
       - name: Install desktop dependencies
         working-directory: ./desktop
         run: |
-          pnpm install
+          # Use npm instead of pnpm for desktop to avoid lockfile issues
+          npm install
           echo "=== Desktop directory after install ==="
           ls -la
-          echo "=== Node modules ==="
+          echo "=== Checking electron ==="
           ls node_modules/.bin/ | grep electron || echo "electron not in bin"
 
       - name: Build desktop app
@@ -74,11 +75,11 @@ jobs:
           echo "=== Building for ${{ matrix.target }} ==="
           mkdir -p release
           if [ "${{ matrix.target }}" = "mac" ]; then
-            npx electron-builder --mac --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
+            npm run build:mac 2>&1 || npx electron-builder --mac --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           elif [ "${{ matrix.target }}" = "win" ]; then
-            npx electron-builder --win --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
+            npm run build:win 2>&1 || npx electron-builder --win --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           else
-            npx electron-builder --linux --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
+            npm run build:linux 2>&1 || npx electron-builder --linux --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           fi
           echo "=== Build step complete, checking release dir ==="
           ls -la release/ 2>/dev/null || echo "NO RELEASE DIRECTORY!"
