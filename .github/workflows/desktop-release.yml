@@ -138,6 +138,16 @@ jobs:
             echo "MACOS_SIGNING_SETUP=false" >> "$GITHUB_ENV"
           fi
 
+      # Verify files exist
+      - name: Verify build files
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          echo "Checking for compiled files..."
+          ls -la dist/ || echo "WARNING: dist/ directory not found"
+          ls -la assets/ || echo "WARNING: assets/ directory not found"
+          ls -la build/ || echo "WARNING: build/ directory not found"
+
       # Build desktop app
       - name: Build desktop app
         shell: bash
@@ -145,6 +155,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Required for electron-builder publishing
           MACOS_SIGNING_SETUP: ${{ env.MACOS_SIGNING_SETUP }}
+          DEBUG: electron-builder  # Enable debug output
         run: |
           if [ "${{ matrix.target }}" = "mac" ]; then
             if [ "$MACOS_SIGNING_SETUP" = "true" ]; then
