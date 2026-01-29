@@ -93,19 +93,8 @@ jobs:
         working-directory: ./desktop
         run: |
           pnpm install
-
-      # Build TypeScript
-      - name: Build TypeScript
-        shell: bash
-        working-directory: ./desktop
-        run: |
-          echo "Building TypeScript..."
-          pnpm build:ts
-          echo "Contents of desktop/dist:"
-          ls -la dist/ || echo "WARNING: dist directory not found"
-          echo "Checking for output files..."
-          test -f dist/main.js && echo "✓ main.js exists" || echo "✗ main.js NOT FOUND"
-          test -f dist/preload.js && echo "✓ preload.js exists" || echo "✗ preload.js NOT FOUND"
+          echo "Checking source files..."
+          ls -la src/
 
       # Build desktop app
       - name: Build desktop app
