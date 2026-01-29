@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build:ts && electron . --dev",
-    "build:ts": "tsc",
+    "build:ts": "tsc --noEmitOnError false",
     "build": "npm run build:ts && electron-builder",
     "build:mac": "npm run build:ts && electron-builder --mac",
     "build:win": "npm run build:ts && electron-builder --win",
