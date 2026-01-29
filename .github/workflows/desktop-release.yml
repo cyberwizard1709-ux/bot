@@ -100,22 +100,30 @@ jobs:
       - name: Build desktop app
         shell: bash
         working-directory: ./desktop
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEBUG: electron-builder
         run: |
           echo "Building for ${{ matrix.target }}..."
           mkdir -p release
           if [ "${{ matrix.target }}" = "mac" ]; then
-            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never 2>&1 || echo "Build completed with errors"
+            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never
           elif [ "${{ matrix.target }}" = "win" ]; then
-            pnpm electron-builder --win --${{ matrix.arch }} --publish=never 2>&1 || echo "Build completed with errors"
+            pnpm electron-builder --win --${{ matrix.arch }} --publish=never
           else
-            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never 2>&1 || echo "Build completed with errors"
+            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never
           fi
+      
+      - name: Check build output
+        shell: bash
+        working-directory: ./desktop
+        run: |
           echo "Contents of release directory:"
-          ls -la release/ 2>/dev/null || echo "No release directory found"
+          ls -la release/ || (echo "No release directory found!" && exit 1)
+          # Verify at least one file exists
+          if [ -z "$(ls -A release/)" ]; then
+            echo "ERROR: No files in release directory!"
+            exit 1
+          fi
 
       # Upload artifacts (for workflow_dispatch and PRs)
       - name: Upload artifacts
@@ -149,13 +157,14 @@ jobs:
 
       - name: List artifacts
         run: |
-          find artifacts -type f -name "*" | sort
+          echo "Downloaded artifacts:"
+          find artifacts -type f -name "*" 2>/dev/null | sort || echo "No artifacts found"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: artifacts/**/*
-          draft: true  # Create as draft for review
+          draft: true
           prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           generate_release_notes: true
           name: Moltbot Desktop ${{ github.ref_name }}
