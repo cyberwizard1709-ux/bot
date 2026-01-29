@@ -1,0 +1,260 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"  # Trigger on version tags like v2026.1.29
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      version:
+        description: "Version to build (e.g., 2026.1.29)"
+        required: true
+        type: string
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: mac
+            arch: x64
+          - platform: macos-latest
+            target: mac
+            arch: arm64
+          - platform: windows-latest
+            target: win
+            arch: x64
+          - platform: ubuntu-latest
+            target: linux
+            arch: x64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Runtime versions
+        shell: bash
+        run: |
+          node -v
+          npm -v
+          pnpm -v
+
+      # Install dependencies for main project
+      - name: Install main dependencies
+        shell: bash
+        env:
+          CI: true
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      # Build main project
+      - name: Build main project
+        shell: bash
+        run: |
+          pnpm canvas:a2ui:bundle
+          pnpm build
+          pnpm ui:build
+
+      # Install desktop dependencies
+      - name: Install desktop dependencies
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          pnpm install
+
+      # Build TypeScript
+      - name: Build TypeScript
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          pnpm build:ts
+
+      # Setup macOS signing (if certificates are available)
+      - name: Setup macOS signing
+        if: matrix.target == 'mac'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+          MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+          MACOS_NOTARIZATION_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}
+        run: |
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            echo "Setting up macOS signing..."
+            
+            # Create keychain
+            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+            KEYCHAIN_PASSWORD=$(openssl rand -base64 12)
+            
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            
+            # Import certificate
+            echo "$MACOS_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+            security import $RUNNER_TEMP/certificate.p12 -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+            security list-keychain -d user -s "$KEYCHAIN_PATH"
+            
+            # Set up notarization credentials
+            mkdir -p ~/.private_keys
+            echo "$MACOS_NOTARIZATION_PASSWORD" > ~/.private_keys/notarization-password
+            
+            echo "MACOS_SIGNING_SETUP=true" >> "$GITHUB_ENV"
+          else
+            echo "No macOS signing certificate found, building unsigned..."
+            echo "MACOS_SIGNING_SETUP=false" >> "$GITHUB_ENV"
+          fi
+
+      # Build desktop app
+      - name: Build desktop app
+        shell: bash
+        working-directory: ./desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Required for electron-builder publishing
+          MACOS_SIGNING_SETUP: ${{ env.MACOS_SIGNING_SETUP }}
+        run: |
+          if [ "${{ matrix.target }}" = "mac" ]; then
+            if [ "$MACOS_SIGNING_SETUP" = "true" ]; then
+              pnpm electron-builder --mac --${{ matrix.arch }} --publish=never
+            else
+              # Build unsigned for testing
+              pnpm electron-builder --mac --${{ matrix.arch }} --publish=never -c.mac.identity=null
+            fi
+          elif [ "${{ matrix.target }}" = "win" ]; then
+            pnpm electron-builder --win --${{ matrix.arch }} --publish=never
+          else
+            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never
+          fi
+
+      # Upload artifacts (for workflow_dispatch and PRs)
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}-${{ matrix.arch }}
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.exe
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+            desktop/release/*.rpm
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Create GitHub Release and upload assets (only on tag push)
+  release:
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: desktop-*
+
+      - name: List artifacts
+        run: |
+          find artifacts -type f -name "*" | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          draft: true  # Create as draft for review
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+          generate_release_notes: true
+          name: Moltbot Desktop ${{ github.ref_name }}
+          body: |
+            ## Moltbot Desktop ${{ github.ref_name }}
+
+            Cross-platform desktop application for Moltbot.
+
+            ### Downloads
+
+            #### macOS
+            - `Moltbot-${{ github.ref_name }}-x64.dmg` - Intel Macs
+            - `Moltbot-${{ github.ref_name }}-arm64.dmg` - Apple Silicon Macs
+            - `Moltbot-${{ github.ref_name }}-mac.zip` - Portable zip
+
+            #### Windows
+            - `Moltbot-${{ github.ref_name }}.exe` - Installer
+            - `Moltbot-${{ github.ref_name }}-portable.exe` - Portable version
+
+            #### Linux
+            - `Moltbot-${{ github.ref_name }}.AppImage` - Universal Linux package
+            - `moltbot_${{ github.ref_name }}_amd64.deb` - Debian/Ubuntu package
+            - `moltbot-${{ github.ref_name }}.x86_64.rpm` - RHEL/CentOS/Fedora package
+
+            ### Installation
+
+            **macOS:**
+            1. Download the appropriate `.dmg` for your Mac (Intel or Apple Silicon)
+            2. Open the `.dmg` and drag Moltbot to Applications
+            3. If you see "Moltbot is damaged" warning, run: `xattr -cr /Applications/Moltbot.app`
+
+            **Windows:**
+            1. Download the `.exe` installer
+            2. Run the installer and follow the prompts
+            3. Moltbot will be installed to your Program Files
+
+            **Linux:**
+            - **AppImage:** Download, make executable (`chmod +x`), and run
+            - **Debian/Ubuntu:** `sudo dpkg -i moltbot_*.deb`
+            - **RHEL/CentOS/Fedora:** `sudo rpm -i moltbot-*.rpm`
+
+            ### Requirements
+            - Node.js ≥22 (bundled with app)
+            - The app runs the Moltbot gateway locally on port 18789
+
+            ### Notes
+            - First launch may take a moment as the gateway initializes
+            - Check the system tray for the Moltbot icon
+            - macOS builds may be unsigned until Apple Developer account is configured
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

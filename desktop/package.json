@@ -1,0 +1,111 @@
+{
+  "name": "moltbot-desktop",
+  "version": "2026.1.29",
+  "description": "Moltbot Desktop - Cross-platform desktop app for Moltbot AI Assistant",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "npm run build:ts && electron . --dev",
+    "build:ts": "tsc",
+    "build": "npm run build:ts && electron-builder",
+    "build:mac": "npm run build:ts && electron-builder --mac",
+    "build:win": "npm run build:ts && electron-builder --win",
+    "build:linux": "npm run build:ts && electron-builder --linux",
+    "pack": "npm run build:ts && electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "moltbot",
+    "ai",
+    "assistant",
+    "desktop",
+    "electron"
+  ],
+  "author": "Moltbot",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.7",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0"
+  },
+  "build": {
+    "appId": "bot.molt.desktop",
+    "productName": "Moltbot",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "../dist/**/*",
+      "../dist/control-ui/**/*",
+      "!../dist/Moltbot.app/**/*",
+      "!../node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "dist",
+        "filter": [
+          "**/*",
+          "!Moltbot.app/**/*"
+        ]
+      },
+      {
+        "from": "../assets",
+        "to": "assets"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Office",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

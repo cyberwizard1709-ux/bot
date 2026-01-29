@@ -144,6 +144,7 @@ Run `moltbot doctor` to surface risky/misconfigured DM policies.
 
 ### Apps + nodes
 - [macOS app](https://docs.molt.bot/platforms/macos): menu bar control plane, [Voice Wake](https://docs.molt.bot/nodes/voicewake)/PTT, [Talk Mode](https://docs.molt.bot/nodes/talk) overlay, [WebChat](https://docs.molt.bot/web/webchat), debug tools, [remote gateway](https://docs.molt.bot/gateway/remote) control.
+- [Desktop app](desktop/): Cross-platform Electron app for macOS, Windows, and Linux. Bundles the Gateway server with the Control UI in a native window with system tray integration. Download from [GitHub Releases](https://github.com/moltbot/moltbot/releases).
 - [iOS node](https://docs.molt.bot/platforms/ios): [Canvas](https://docs.molt.bot/platforms/mac/canvas), [Voice Wake](https://docs.molt.bot/nodes/voicewake), [Talk Mode](https://docs.molt.bot/nodes/talk), camera, screen recording, Bonjour pairing.
 - [Android node](https://docs.molt.bot/platforms/android): [Canvas](https://docs.molt.bot/platforms/mac/canvas), [Talk Mode](https://docs.molt.bot/nodes/talk), camera, screen recording, optional SMS.
 - [macOS node mode](https://docs.molt.bot/nodes): system.run/notify + canvas/camera exposure.

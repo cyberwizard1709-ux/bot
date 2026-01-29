@@ -1,0 +1,133 @@
+name: Desktop Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-build.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-build.yml"
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: mac
+            arch: x64
+          - platform: windows-latest
+            target: win
+            arch: x64
+          - platform: ubuntu-latest
+            target: linux
+            arch: x64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Runtime versions
+        shell: bash
+        run: |
+          node -v
+          npm -v
+          pnpm -v
+
+      - name: Install main dependencies
+        shell: bash
+        env:
+          CI: true
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Build main project
+        shell: bash
+        run: |
+          pnpm canvas:a2ui:bundle
+          pnpm build
+          pnpm ui:build
+
+      - name: Install desktop dependencies
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          pnpm install
+
+      - name: Build TypeScript
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          pnpm build:ts
+
+      # Build desktop app (unsigned, for testing)
+      - name: Build desktop app (unsigned)
+        shell: bash
+        working-directory: ./desktop
+        run: |
+          if [ "${{ matrix.target }}" = "mac" ]; then
+            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never -c.mac.identity=null
+          elif [ "${{ matrix.target }}" = "win" ]; then
+            pnpm electron-builder --win --${{ matrix.arch }} --publish=never
+          else
+            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}-${{ matrix.arch }}-test
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.exe
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+          if-no-files-found: ignore
+          retention-days: 3
