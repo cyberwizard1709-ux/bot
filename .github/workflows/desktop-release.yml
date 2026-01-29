@@ -101,69 +101,15 @@ jobs:
         run: |
           pnpm build:ts || echo "TypeScript build completed with errors (acceptable)"
 
-      # Setup macOS signing (if certificates are available)
-      - name: Setup macOS signing
-        if: matrix.target == 'mac'
-        shell: bash
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
-          MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
-          MACOS_NOTARIZATION_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}
-        run: |
-          if [ -n "$MACOS_CERTIFICATE" ]; then
-            echo "Setting up macOS signing..."
-            
-            # Create keychain
-            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-            KEYCHAIN_PASSWORD=$(openssl rand -base64 12)
-            
-            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-            
-            # Import certificate
-            echo "$MACOS_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
-            security import $RUNNER_TEMP/certificate.p12 -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-            security list-keychain -d user -s "$KEYCHAIN_PATH"
-            
-            # Set up notarization credentials
-            mkdir -p ~/.private_keys
-            echo "$MACOS_NOTARIZATION_PASSWORD" > ~/.private_keys/notarization-password
-            
-            echo "MACOS_SIGNING_SETUP=true" >> "$GITHUB_ENV"
-          else
-            echo "No macOS signing certificate found, building unsigned..."
-            echo "MACOS_SIGNING_SETUP=false" >> "$GITHUB_ENV"
-          fi
-
-      # Verify files exist
-      - name: Verify build files
-        shell: bash
-        working-directory: ./desktop
-        run: |
-          echo "Checking for compiled files..."
-          ls -la dist/ || echo "WARNING: dist/ directory not found"
-          ls -la assets/ || echo "WARNING: assets/ directory not found"
-          ls -la build/ || echo "WARNING: build/ directory not found"
-
       # Build desktop app
       - name: Build desktop app
         shell: bash
         working-directory: ./desktop
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Required for electron-builder publishing
-          MACOS_SIGNING_SETUP: ${{ env.MACOS_SIGNING_SETUP }}
-          DEBUG: electron-builder  # Enable debug output
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ matrix.target }}" = "mac" ]; then
-            if [ "$MACOS_SIGNING_SETUP" = "true" ]; then
-              pnpm electron-builder --mac --${{ matrix.arch }} --publish=never
-            else
-              # Build unsigned for testing
-              pnpm electron-builder --mac --${{ matrix.arch }} --publish=never -c.mac.identity=null
-            fi
+            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never
           elif [ "${{ matrix.target }}" = "win" ]; then
             pnpm electron-builder --win --${{ matrix.arch }} --publish=never
           else
