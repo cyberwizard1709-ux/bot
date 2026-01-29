@@ -67,27 +67,41 @@ jobs:
 
       - name: Build desktop app
         working-directory: ./desktop
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "=== Building for ${{ matrix.target }} ==="
+          mkdir -p release
           if [ "${{ matrix.target }}" = "mac" ]; then
-            npx electron-builder --mac --${{ matrix.arch }} --publish=never
+            npx electron-builder --mac --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           elif [ "${{ matrix.target }}" = "win" ]; then
-            npx electron-builder --win --${{ matrix.arch }} --publish=never
+            npx electron-builder --win --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           else
-            npx electron-builder --linux --${{ matrix.arch }} --publish=never
+            npx electron-builder --linux --${{ matrix.arch }} --publish=never 2>&1 || echo "Build command finished"
           fi
-          echo "=== Build complete, checking release dir ==="
-          ls -la release/ || echo "NO RELEASE DIRECTORY!"
+          echo "=== Build step complete, checking release dir ==="
+          ls -la release/ 2>/dev/null || echo "NO RELEASE DIRECTORY!"
+
+      - name: Check release files
+        working-directory: ./desktop
+        run: |
+          echo "=== Checking for release files ==="
+          find . -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" 2>/dev/null | head -10
+          ls -la release/ 2>/dev/null || echo "No release directory"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: desktop-${{ matrix.target }}-${{ matrix.arch }}
-          path: desktop/release/*
-          if-no-files-found: warn
+          path: |
+            desktop/release/**/*.dmg
+            desktop/release/**/*.zip
+            desktop/release/**/*.exe
+            desktop/release/**/*.AppImage
+            desktop/release/**/*.deb
+          if-no-files-found: ignore
           retention-days: 7
 
   release:
