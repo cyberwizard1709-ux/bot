@@ -1,21 +1,14 @@
 {
   "name": "moltbot-desktop",
   "version": "2026.1.29",
-  "description": "Moltbot Desktop - Cross-platform desktop app for Moltbot AI Assistant",
-  "type": "module",
+  "description": "Moltbot Desktop",
   "main": "src/main.js",
   "scripts": {
-    "dev": "electron . --dev",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "pack": "electron-builder --dir",
-    "postinstall": "electron-builder install-app-deps"
+    "build:linux": "electron-builder --linux"
   },
-  "keywords": ["moltbot", "ai", "assistant", "desktop", "electron"],
-  "author": "Moltbot",
-  "license": "MIT",
   "devDependencies": {
     "electron": "^34.0.0",
     "electron-builder": "^25.1.7"
@@ -31,31 +24,16 @@
     },
     "files": [
       "src/**/*",
-      "assets/**/*",
-      "../dist/**/*",
-      "!../dist/Moltbot.app/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "../dist",
-        "to": "dist",
-        "filter": ["**/*", "!Moltbot.app/**/*"]
-      }
+      "assets/**/*"
     ],
     "mac": {
-      "category": "public.app-category.productivity",
-      "target": ["dmg", "zip"]
+      "target": "dmg"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": "nsis"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
-      "category": "Office"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "AppImage"
     }
   }
 }

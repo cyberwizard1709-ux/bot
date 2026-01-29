@@ -3,11 +3,11 @@ name: Desktop Release
 on:
   push:
     tags:
-      - "v*"  # Trigger on version tags like v2026.1.29
-  workflow_dispatch:  # Allow manual triggering
+      - "v*"
+  workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g., 2026.1.29)"
+        description: "Version to build"
         required: true
         type: string
 
@@ -35,22 +35,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Checkout submodules (retry)
-        shell: bash
-        run: |
-          set -euo pipefail
-          git submodule sync --recursive
-          for attempt in 1 2 3 4 5; do
-            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
-              exit 0
-            fi
-            echo "Submodule update failed (attempt $attempt/5). Retrying…"
-            sleep $((attempt * 10))
-          done
-          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -61,55 +45,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          check-latest: true
           cache: 'pnpm'
 
-      - name: Runtime versions
-        shell: bash
-        run: |
-          node -v
-          npm -v
-          pnpm -v
-
-      # Install dependencies for main project
       - name: Install main dependencies
-        shell: bash
-        env:
-          CI: true
-        run: |
-          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+        run: pnpm install --frozen-lockfile
 
-      # Build main project
       - name: Build main project
-        shell: bash
         run: |
           pnpm canvas:a2ui:bundle
           pnpm build
           pnpm ui:build
 
-      # Install desktop dependencies
       - name: Install desktop dependencies
-        shell: bash
         working-directory: ./desktop
         run: |
           pnpm install
-          echo "Checking source files..."
-          ls -la src/
+          echo "=== Desktop directory after install ==="
+          ls -la
+          echo "=== Node modules ==="
+          ls node_modules/.bin/ | grep electron || echo "electron not in bin"
 
-      # Build desktop app
       - name: Build desktop app
-        shell: bash
         working-directory: ./desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "Checking electron-builder..."
-          npx electron-builder --version
-          echo "Building for ${{ matrix.target }}..."
-          mkdir -p release
+          echo "=== Building for ${{ matrix.target }} ==="
           if [ "${{ matrix.target }}" = "mac" ]; then
             npx electron-builder --mac --${{ matrix.arch }} --publish=never
           elif [ "${{ matrix.target }}" = "win" ]; then
@@ -117,25 +78,18 @@ jobs:
           else
             npx electron-builder --linux --${{ matrix.arch }} --publish=never
           fi
-          echo "Contents of release directory:"
-          ls -la release/
+          echo "=== Build complete, checking release dir ==="
+          ls -la release/ || echo "NO RELEASE DIRECTORY!"
 
-      # Upload artifacts (for workflow_dispatch and PRs)
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: desktop-${{ matrix.target }}-${{ matrix.arch }}
-          path: |
-            desktop/release/*.dmg
-            desktop/release/*.zip
-            desktop/release/*.exe
-            desktop/release/*.AppImage
-            desktop/release/*.deb
-            desktop/release/*.rpm
-          if-no-files-found: ignore
+          path: desktop/release/*
+          if-no-files-found: warn
           retention-days: 7
 
-  # Create GitHub Release and upload assets (only on tag push)
   release:
     needs: build-desktop
     runs-on: ubuntu-latest
@@ -152,8 +106,10 @@ jobs:
 
       - name: List artifacts
         run: |
-          echo "Downloaded artifacts:"
-          find artifacts -type f -name "*" 2>/dev/null | sort || echo "No artifacts found"
+          echo "=== Artifacts downloaded ==="
+          find artifacts -type f 2>/dev/null | head -20 || echo "No files found"
+          echo "=== Directory structure ==="
+          ls -laR artifacts/ 2>/dev/null | head -50 || echo "No artifacts dir"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -163,51 +119,5 @@ jobs:
           prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           generate_release_notes: true
           name: Moltbot Desktop ${{ github.ref_name }}
-          body: |
-            ## Moltbot Desktop ${{ github.ref_name }}
-
-            Cross-platform desktop application for Moltbot.
-
-            ### Downloads
-
-            #### macOS
-            - `Moltbot-${{ github.ref_name }}-x64.dmg` - Intel Macs
-            - `Moltbot-${{ github.ref_name }}-arm64.dmg` - Apple Silicon Macs
-            - `Moltbot-${{ github.ref_name }}-mac.zip` - Portable zip
-
-            #### Windows
-            - `Moltbot-${{ github.ref_name }}.exe` - Installer
-            - `Moltbot-${{ github.ref_name }}-portable.exe` - Portable version
-
-            #### Linux
-            - `Moltbot-${{ github.ref_name }}.AppImage` - Universal Linux package
-            - `moltbot_${{ github.ref_name }}_amd64.deb` - Debian/Ubuntu package
-            - `moltbot-${{ github.ref_name }}.x86_64.rpm` - RHEL/CentOS/Fedora package
-
-            ### Installation
-
-            **macOS:**
-            1. Download the appropriate `.dmg` for your Mac (Intel or Apple Silicon)
-            2. Open the `.dmg` and drag Moltbot to Applications
-            3. If you see "Moltbot is damaged" warning, run: `xattr -cr /Applications/Moltbot.app`
-
-            **Windows:**
-            1. Download the `.exe` installer
-            2. Run the installer and follow the prompts
-            3. Moltbot will be installed to your Program Files
-
-            **Linux:**
-            - **AppImage:** Download, make executable (`chmod +x`), and run
-            - **Debian/Ubuntu:** `sudo dpkg -i moltbot_*.deb`
-            - **RHEL/CentOS/Fedora:** `sudo rpm -i moltbot-*.rpm`
-
-            ### Requirements
-            - Node.js ≥22 (bundled with app)
-            - The app runs the Moltbot gateway locally on port 18789
-
-            ### Notes
-            - First launch may take a moment as the gateway initializes
-            - Check the system tray for the Moltbot icon
-            - macOS builds may be unsigned until Apple Developer account is configured
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
