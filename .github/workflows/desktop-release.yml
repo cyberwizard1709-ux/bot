@@ -107,18 +107,18 @@ jobs:
           echo "Directory contents:"
           ls -la
           echo "Checking electron-builder..."
-          pnpm electron-builder --version
+          npx electron-builder --version
           echo "Building for ${{ matrix.target }}..."
           mkdir -p release
           if [ "${{ matrix.target }}" = "mac" ]; then
-            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never || (echo "Build failed!"; exit 1)
+            npx electron-builder --mac --${{ matrix.arch }} --publish=never
           elif [ "${{ matrix.target }}" = "win" ]; then
-            pnpm electron-builder --win --${{ matrix.arch }} --publish=never || (echo "Build failed!"; exit 1)
+            npx electron-builder --win --${{ matrix.arch }} --publish=never
           else
-            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never || (echo "Build failed!"; exit 1)
+            npx electron-builder --linux --${{ matrix.arch }} --publish=never
           fi
           echo "Contents of release directory:"
-          ls -la release/ || (echo "No release directory found!" && exit 1)
+          ls -la release/
 
       # Upload artifacts (for workflow_dispatch and PRs)
       - name: Upload artifacts
