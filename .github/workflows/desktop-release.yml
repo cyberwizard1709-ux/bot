@@ -94,18 +94,18 @@ jobs:
         run: |
           pnpm install
 
-      # Build TypeScript (allow failure - will still emit JS)
+      # Build TypeScript (must succeed)
       - name: Build TypeScript
         shell: bash
         working-directory: ./desktop
         run: |
-          pnpm build:ts 2>&1 || echo "TypeScript build completed with errors (acceptable)"
+          echo "Building TypeScript..."
+          npx tsc --version
+          npx tsc
           echo "Contents of desktop/dist:"
-          ls -la dist/ 2>/dev/null || echo "WARNING: desktop/dist not found!"
-          echo "Checking for main.js:"
-          test -f dist/main.js && echo "main.js exists" || echo "main.js NOT FOUND!"
-          echo "Checking for preload.js:"
-          test -f dist/preload.js && echo "preload.js exists" || echo "preload.js NOT FOUND!"
+          ls -la dist/
+          test -f dist/main.js || (echo "ERROR: main.js not found!" && exit 1)
+          test -f dist/preload.js || (echo "ERROR: preload.js not found!" && exit 1)
 
       # Build desktop app
       - name: Build desktop app
