@@ -99,9 +99,13 @@ jobs:
         shell: bash
         working-directory: ./desktop
         run: |
-          pnpm build:ts || echo "TypeScript build completed with errors (acceptable)"
+          pnpm build:ts 2>&1 || echo "TypeScript build completed with errors (acceptable)"
           echo "Contents of desktop/dist:"
-          ls -la dist/ || echo "WARNING: desktop/dist not found!"
+          ls -la dist/ 2>/dev/null || echo "WARNING: desktop/dist not found!"
+          echo "Checking for main.js:"
+          test -f dist/main.js && echo "main.js exists" || echo "main.js NOT FOUND!"
+          echo "Checking for preload.js:"
+          test -f dist/preload.js && echo "preload.js exists" || echo "preload.js NOT FOUND!"
 
       # Build desktop app
       - name: Build desktop app
