@@ -2,11 +2,13 @@
   "appId": "bot.molt.desktop",
   "productName": "Moltbot",
   "directories": {
-    "output": "release"
+    "output": "release",
+    "buildResources": "assets"
   },
   "files": [
     "dist/**/*",
-    "assets/**/*"
+    "assets/**/*",
+    "package.json"
   ],
   "extraResources": [
     {
@@ -15,18 +17,20 @@
       "filter": ["**/*", "!Moltbot.app/**/*"]
     }
   ],
+  "asar": true,
   "mac": {
     "category": "public.app-category.productivity",
-    "target": ["dmg", "zip"],
-    "icon": "assets/icon.icns"
+    "target": ["dmg", "zip"]
   },
   "win": {
-    "target": ["nsis", "portable"],
-    "icon": "assets/icon.ico"
+    "target": ["nsis", "portable"]
   },
   "linux": {
     "target": ["AppImage", "deb"],
-    "category": "Office",
-    "icon": "assets/icon.png"
+    "category": "Office"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
   }
 }
