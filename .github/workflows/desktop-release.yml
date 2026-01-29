@@ -103,24 +103,29 @@ jobs:
           echo "Contents of desktop/dist:"
           ls -la dist/ || echo "WARNING: desktop/dist not found!"
 
-      # Build desktop app (allow failure for now)
+      # Build desktop app
       - name: Build desktop app
         shell: bash
         working-directory: ./desktop
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Building for ${{ matrix.target }}..."
+          mkdir -p release
           if [ "${{ matrix.target }}" = "mac" ]; then
-            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never || echo "Build completed with warnings"
+            pnpm electron-builder --mac --${{ matrix.arch }} --publish=never
           elif [ "${{ matrix.target }}" = "win" ]; then
-            pnpm electron-builder --win --${{ matrix.arch }} --publish=never || echo "Build completed with warnings"
+            pnpm electron-builder --win --${{ matrix.arch }} --publish=never
           else
-            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never || echo "Build completed with warnings"
+            pnpm electron-builder --linux --${{ matrix.arch }} --publish=never
           fi
           echo "Contents of release directory:"
-          ls -la release/ 2>/dev/null || echo "No release directory yet"
+          ls -la release/
+          # Check if any files were created
+          if [ -z "$(ls -A release/)" ]; then
+            echo "ERROR: No files were created in release directory!"
+            exit 1
+          fi
 
       # Upload artifacts (for workflow_dispatch and PRs)
       - name: Upload artifacts
